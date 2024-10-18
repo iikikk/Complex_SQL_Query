@@ -1,26 +1,48 @@
 """
-Transforms and Loads data into the local SQLite3 database
-Example:
-,general name,count_products,ingred_FPro,avg_FPro_products,avg_distance_root,ingred_normalization_term,semantic_tree_name,semantic_tree_node
+Transforms and Loads data into the databricks database
 """
-import sqlite3
+from dotenv import load_dotenv
+from databricks import sql
 import csv
 import os
 
 #load the csv file and insert into a new sqlite3 database
-def load(dataset="/workspaces/sqlite-lab/data/GroceryDB_IgFPro.csv"):
-    """"Transforms and Loads data into the local SQLite3 database"""
-
-    #prints the full working directory and path
-    print(os.getcwd())
+def load(dataset="data/Movie_Data.csv"):
+    """"Transforms and Loads data into the databricks database"""
     payload = csv.reader(open(dataset, newline=''), delimiter=',')
-    conn = sqlite3.connect('GroceryDB.db')
-    c = conn.cursor()
-    c.execute("DROP TABLE IF EXISTS GroceryDB")
-    c.execute("CREATE TABLE GroceryDB (id,general_name, count_products, ingred_FPro, avg_FPro_products, avg_distance_root, ingred_normalization_term, semantic_tree_name, semantic_tree_node)")
-    #insert
-    c.executemany("INSERT INTO GroceryDB VALUES (?,?, ?, ?, ?, ?, ?, ?, ?)", payload)
-    conn.commit()
-    conn.close()
-    return "GroceryDB.db"
+    next(payload)
+    load_dotenv()
+    with sql.connect(server_hostname = os.getenv("SERVER_HOSTNAME"),
+                 http_path       = os.getenv("HTTP_PATH"),
+                 access_token    = os.getenv("DATABRICKS_KEY")
+                 ) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """CREATE TABLE IF NOT EXISTS qcmovie 
+                           (MovieTitle VARCHAR(255),ReleaseDate DATE,
+                           Director VARCHAR(255),Genre VARCHAR(100),
+                           BudgetMillions DECIMAL(10, 2),
+                           BoxOfficeMillions DECIMAL(10, 2));
+                """
+            )
+            cursor.execute("SELECT * FROM qcmovie")
+            result = cursor.fetchall()
+            if not result:
+                print("here")
+                string_sql = "INSERT INTO qcmovie VALUES"
+                for i in payload:
+                    string_sql += "\n" + str(tuple(i)) + ","
+                string_sql = string_sql[:-1] + ";"
+                print(string_sql)
+                cursor.execute(string_sql)
+                # result = cursor.fetchall()
+
+                # for row in result:
+                #     print(row)
+            cursor.close()
+            connection.close()
+    return "db loaded or already loaded" 
+
+if __name__ == "__main__":
+    load()
 
